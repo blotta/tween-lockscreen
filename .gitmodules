@@ -1,0 +1,6 @@
+[submodule "libs/tween"]
+	path = libs/tween
+	url = https://github.com/kikito/tween.lua.git
+[submodule "libs/inspect"]
+	path = libs/inspect
+	url = git://github.com/kikito/inspect.lua.git
