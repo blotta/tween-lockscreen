@@ -1,12 +1,11 @@
 local tween = require 'libs.tween.tween'
+-- local inspect = require 'libs.inspect.inspect'
 
 -- SlidingSq class def
 
--- default values
 SlidingSq = {}
 SlidingSq.__index = SlidingSq
 
--- SlidingSq_defaults = {dv = 'dafultv'}
 
 function setDefault(t, d)
     local default = {__index = function() return d end}
@@ -26,17 +25,18 @@ function SlidingSq.new(...)
     setmetatable(t, targetsq_defauts)
 
     -- object to return
-    local o = {
-        x = math.random(0, love.graphics.getWidth()),
-        y = math.random(0, love.graphics.getHeight()),
-        w = math.random(t.w / 4, t.w),
-        h = math.random(t.h / 4, t.h),
-        color = {
-            r = math.random(),
-            g = math.random(),
-            b = math.random(),
-            a = 0
-        }
+    local o = {}
+
+    o.scale = 4
+    o.x = math.random(0, love.graphics.getWidth())
+    o.y = math.random(0, love.graphics.getHeight())
+    o.w = math.random(t.w / 4 , t.w)
+    o.h = math.random(t.h / 4, t.h)
+    o.color = {
+        r = math.random(),
+        g = math.random(),
+        b = math.random(),
+        a = 0
     }
 
     -- get position inside target square
@@ -47,13 +47,13 @@ function SlidingSq.new(...)
     -- tweeeeeens
     o.tweens = {
         -- fade in
-        fade_in = tween.new(0.5, o.color, { a = 1 }, 'linear'),
+        fade_in = tween.new(0.5, o.color, { a = 0.8 }, 'linear'),
         -- move to center
         move = tween.new(2, o, innerTarget, 'outExpo'),
         -- fade away
-        fade_out = tween.new(math.random(), o.color, {
-            a = 0
-        }, 'linear')
+        fade_out = tween.new(math.random(), o.color, { a = 0 }, 'linear'),
+        -- reduce scale, giving z level impression
+        reduce_scale = tween.new(2, o, {scale = 1}, 'outExpo')
     }
 
     return setmetatable( o, SlidingSq)
@@ -74,12 +74,8 @@ function TargetSq.new()
         y = love.graphics.getHeight()/2 - 32,
         w = 64,
         h = 64,
-        -- color = {
-        --     r = math.random(),
-        --     g = math.random(),
-        --     b = math.random(),
-        --     a = 0
-        -- }
+        tx = 0,
+        ty = 0
     }
 
     o.tweens = {}
@@ -92,13 +88,14 @@ function TargetSq:getSquare()
 end
 
 function TargetSq:setTween(action, ...)
-    table.insert(self.tweens, { action = tween.new(...) })
-    -- self.tweens = tween.new(...)
+    self.tweens[action] = tween.new(...)
 end
 
 function TargetSq.move(self, x, y)
+    self.tx = x - self.w/2
+    self.ty = y - self.h/2
     self:setTween('move', 10, self, {x = x - self.w/2, y = y - self.h/2})
-    -- print(#self.tweens)
+    -- print(inspect(self.tweens))
 end
 
 setmetatable(TargetSq, { __call = function(_, ...) return TargetSq.new(...) end})
@@ -109,16 +106,11 @@ setmetatable(TargetSq, { __call = function(_, ...) return TargetSq.new(...) end}
 objList = {}
 
 tq = nil
--- local obj = prot
--- local objTween = tween.new(4, obj, {x = 500, y=300}, 'inOutExpo')
 
 
 function love.load()
-    -- table.insert(objList, new_obj())
-
     tq = TargetSq()
-
-
+    tq:move(0,0)
 end
 
 function love.keypressed(key)
@@ -131,7 +123,6 @@ end
 
 function love.mousepressed(x, y, button, istouch)
     if button == 1 then
-        -- tq:setTween(10, tq, {x = x - tq.w/2, y = y - tq.h/2} )
         tq:move(x, y)
     end
 end
@@ -140,7 +131,8 @@ function love.update(dt)
     for i, o in pairs(objList) do
         o.tweens.fade_in:update(dt)
         local mv_complete = o.tweens.move:update(dt)
-        if mv_complete then
+        local scale_complete = o.tweens.reduce_scale:update(dt)
+        if mv_complete and scale_complete then
             local fo_complete = o.tweens.fade_out:update(dt)
             if fo_complete then
                 table.remove(objList, i)
@@ -151,11 +143,12 @@ function love.update(dt)
 
     -- update TargetSq
     for a, t in pairs(tq.tweens) do
-        -- t:update(dt)
-        print(a)
-        -- if a == 'move' then
-        --     t:update(dt)
-        -- end
+        if a == 'move' then
+            if t:update(dt) then --returns true if finished moving
+                tq:move(math.random(love.graphics.getWidth()),
+                        math.random(love.graphics.getHeight()))
+            end
+        end
     end
 
     -- insert more sqrs
@@ -171,20 +164,23 @@ function love.draw()
 
     for i, o in pairs(objList) do
         love.graphics.setColor(o.color.r, o.color.g, o.color.b, o.color.a)
-        love.graphics.rectangle('fill', o.x, o.y, o.w, o.h)
+        love.graphics.rectangle('fill', o.x, o.y, o.w * o.scale, o.h * o.scale)
     end
 
-    -- Reference lines
-    love.graphics.setColor(0.5, 1, 1)
-    love.graphics.line(w/2, 0, w/2, h) -- middle x
-    love.graphics.line(0, h/2, w, h/2) -- middle y
+    -- Reference lines. Uncomment to see what's going on
+    -- love.graphics.setColor(0.5, 1, 1)
+    -- love.graphics.line(w/2, 0, w/2, h) -- middle x
+    -- love.graphics.line(0, h/2, w, h/2) -- middle y
 
-    love.graphics.line(w/2 - 32, 0, w/2 - 32, h) -- top left x
-    love.graphics.line(0, h/2 - 32, w, h/2 -32) -- top left y
+    -- love.graphics.line(w/2 - 32, 0, w/2 - 32, h) -- top left x
+    -- love.graphics.line(0, h/2 - 32, w, h/2 -32) -- top left y
 
-    love.graphics.line(w/2 + 32, 0, w/2 + 32, h) -- bottom right x
-    love.graphics.line(0, h/2 + 32, w, h/2 + 32) -- bottom righ y
+    -- love.graphics.line(w/2 + 32, 0, w/2 + 32, h) -- bottom right x
+    -- love.graphics.line(0, h/2 + 32, w, h/2 + 32) -- bottom righ y
 
-    love.graphics.setColor(1, 0, 0)
-    love.graphics.rectangle('line', tq.x, tq.y, tq.w, tq.h)
+    -- love.graphics.setColor(1, 0, 0)
+    -- love.graphics.rectangle('line', tq.x, tq.y, tq.w, tq.h)
+
+    -- love.graphics.setColor(1, 0.8, 0.5)
+    -- love.graphics.rectangle('line', tq.tx, tq.ty, tq.w, tq.h)
 end
